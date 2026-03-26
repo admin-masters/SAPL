@@ -1,0 +1,299 @@
+<?php
+// Check user login status
+$is_logged_in = is_user_logged_in();
+$user_name = '';
+$login_link = wp_login_url(get_permalink());
+
+if ($is_logged_in) {
+    $current_user = wp_get_current_user();
+    $user_name = $current_user->display_name;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Contract Agreement</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;
+    background:#f7f9fc;
+    color:#0f172a;
+}
+
+/* ===== HEADER ===== */
+.header{
+    background:#ffffff;
+    border-bottom:1px solid #e5e7eb;
+}
+.header-inner{
+    max-width:1000px;
+    margin:auto;
+    padding:18px 24px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.logo{
+    font-weight:600;
+    font-size:18px;
+}
+.signin{
+    padding:8px 16px;
+    background:#0f172a;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    font-size:14px;
+    text-decoration:none;
+    display:inline-block;
+}
+.user-info{
+    font-size:14px;
+    font-weight:600;
+    color:#0f172a;
+}
+
+/* ===== PAGE ===== */
+.page{
+    max-width:1000px;
+    margin:40px auto;
+    padding:0 24px;
+}
+
+.card{
+    background:#ffffff;
+    border:1px solid #e5e7eb;
+    border-radius:18px;
+    padding:28px;
+}
+
+/* ===== TITLES ===== */
+h1{
+    font-size:22px;
+    margin-bottom:6px;
+}
+.subtitle{
+    font-size:14px;
+    color:#64748b;
+    margin-bottom:28px;
+}
+
+.section{
+    margin-bottom:28px;
+}
+
+.section h3{
+    font-size:15px;
+    margin-bottom:14px;
+}
+
+/* ===== ROW SYSTEM (FIXED ALIGNMENT) ===== */
+.info-group{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px 40px;
+}
+
+.info-row{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+}
+
+.info-row span{
+    font-size:12px;
+    color:#64748b;
+}
+
+.info-row strong{
+    font-size:14px;
+    font-weight:500;
+}
+
+/* ===== PAYMENT ===== */
+.payment-box{
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    padding:16px;
+}
+
+.payment-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:14px;
+    margin-bottom:8px;
+}
+
+.payment-row.total{
+    font-weight:600;
+}
+
+/* ===== TERMS ===== */
+.terms{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    font-size:13px;
+    color:#475569;
+}
+
+/* ===== ACTIONS ===== */
+.actions{
+    margin-top:32px;
+    display:flex;
+    justify-content:flex-end;
+    gap:14px;
+}
+
+.actions button{
+    padding:12px 18px;
+    border-radius:10px;
+    font-size:14px;
+    cursor:pointer;
+}
+
+.download{
+    background:#0f172a;
+    color:#ffffff;
+    border:none;
+}
+
+/* ===== FOOTER ===== */
+.footer{
+    margin-top:60px;
+    padding:20px 0;
+    text-align:center;
+    font-size:13px;
+    color:#64748b;
+    border-top:1px solid #e5e7eb;
+    background:#ffffff;
+}
+</style>
+</head>
+
+<body>
+
+<!-- HEADER -->
+<div class="header">
+    <div class="header-inner">
+        <div class="logo">My WordPress Site</div>
+        
+        <!-- DEBUG INFO -->
+        <div style="position:absolute; top:100px; left:20px; background:yellow; padding:10px; font-size:11px; z-index:9999;">
+            <strong>DEBUG:</strong><br>
+            Logged In: <?php echo $is_logged_in ? 'YES' : 'NO'; ?><br>
+            User Name: "<?php echo $user_name; ?>"<br>
+            User Name Empty: <?php echo empty($user_name) ? 'YES' : 'NO'; ?>
+        </div>
+        
+        <?php if ($is_logged_in && !empty($user_name)): ?>
+            <span class="user-info">Hi, <?php echo esc_html($user_name); ?></span>
+        <?php else: ?>
+            <a href="<?php echo esc_url($login_link); ?>" class="signin">Sign In</a>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="page">
+
+    <div class="card">
+
+        <h1>Contract Agreement</h1>
+        <div class="subtitle">
+            Contract #87 - Please review the session details and confirm to proceed with payment.
+        </div>
+
+        <!-- Educator -->
+        <div class="section">
+            <h3>Educator Details</h3>
+            <div class="info-group">
+                <div class="info-row">
+                    <span>Name</span>
+                    <strong>sanyam jain</strong>
+                </div>
+                <div class="info-row">
+                    <span>College</span>
+                    <strong>jain78790@gmail.com</strong>
+                </div>
+                <div class="info-row">
+                    <span>Topic</span>
+                    <strong>Group class</strong>
+                </div>
+                <div class="info-row">
+                    <span>Session Type</span>
+                    <strong>One-on-One Tutoring</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session -->
+        <div class="section">
+            <h3>Session Details</h3>
+            <div class="info-group">
+                <div class="info-row">
+                    <span>Date/Time</span>
+                    <strong>2026-01-19 16:00</strong>
+                </div>
+                <div class="info-row">
+                    <span>Duration</span>
+                    <strong>60 minutes</strong>
+                </div>
+                <div class="info-row">
+                    <span>Mode</span>
+                    <strong>Online</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment -->
+        <div class="section">
+            <h3>Payment Summary</h3>
+            <div class="payment-box">
+                <div class="payment-row total">
+                    <span>Total Amount</span>
+                    <span><span class="woocommerce-Price-amount amount"><bdi><span class="woocommerce-Price-currencySymbol">&#8377;</span>1,800.00</bdi></span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms -->
+        <div class="section">
+            <h3>Terms & Conditions</h3>
+            <div class="terms">
+                <p>Standard service terms apply. Cancellations 48h prior receive full refund; otherwise 50% fee.</p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <button class="download" onclick="window.print()">Download Contract</button>
+        </div>
+
+    </div>
+</div>
+
+<div class="footer">
+    <p></p>
+    <p>Generated by platform-core · Flow 7</p>
+</div>
+
+<script>
+// Optional: Add print-specific styling
+window.onbeforeprint = function() {
+    document.querySelector('.header').style.display = 'none';
+    document.querySelector('.actions').style.display = 'none';
+};
+
+window.onafterprint = function() {
+    document.querySelector('.header').style.display = 'block';
+    document.querySelector('.actions').style.display = 'flex';
+};
+</script>
+
+</body>
+</html>

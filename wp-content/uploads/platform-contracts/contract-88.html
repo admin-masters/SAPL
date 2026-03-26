@@ -1,0 +1,308 @@
+<?php
+// Check user login status
+$is_logged_in = is_user_logged_in();
+$user_name = '';
+$login_link = wp_login_url(get_permalink());
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Contract Agreement</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;
+    background:#f7f9fc;
+    color:#0f172a;
+}
+
+/* ===== HEADER ===== */
+.header{
+    background:#ffffff;
+    border-bottom:1px solid #e5e7eb;
+}
+.header-inner{
+    max-width:1000px;
+    margin:auto;
+    padding:14px 24px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.logo{
+    font-weight:600;
+    font-size:16px;
+}
+.signin{
+    padding:7px 14px;
+    background:#0f172a;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    font-size:13px;
+    text-decoration:none;
+    display:inline-block;
+}
+.user-info{
+    font-size:13px;
+    font-weight:600;
+    color:#0f172a;
+}
+
+/* ===== PAGE ===== */
+.page{
+    max-width:1000px;
+    margin:24px auto;
+    padding:0 24px;
+}
+
+.card{
+    background:#ffffff;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    padding:20px 24px;
+}
+
+/* ===== TITLES ===== */
+h1{
+    font-size:20px;
+    margin-bottom:4px;
+}
+.subtitle{
+    font-size:13px;
+    color:#64748b;
+    margin-bottom:20px;
+}
+
+.section{
+    margin-bottom:20px;
+}
+
+.section h3{
+    font-size:14px;
+    margin-bottom:10px;
+    font-weight:600;
+}
+
+/* ===== ROW SYSTEM (FIXED ALIGNMENT) ===== */
+.info-group{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px 32px;
+}
+
+.info-row{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+}
+
+.info-row span{
+    font-size:11px;
+    color:#64748b;
+}
+
+.info-row strong{
+    font-size:13px;
+    font-weight:500;
+}
+
+/* ===== PAYMENT ===== */
+.payment-box{
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    padding:12px 14px;
+}
+
+.payment-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:13px;
+    margin-bottom:0;
+}
+
+.payment-row.total{
+    font-weight:600;
+}
+
+/* ===== TERMS ===== */
+.terms{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    font-size:12px;
+    color:#475569;
+    line-height:1.4;
+}
+
+/* ===== ACTIONS ===== */
+.actions{
+    margin-top:20px;
+    display:flex;
+    justify-content:flex-end;
+    gap:12px;
+}
+
+.actions button{
+    padding:10px 16px;
+    border-radius:8px;
+    font-size:13px;
+    cursor:pointer;
+}
+
+.download{
+    background:#0f172a;
+    color:#ffffff;
+    border:none;
+}
+
+/* ===== FOOTER ===== */
+.footer{
+    margin-top:32px;
+    padding:14px 0;
+    text-align:center;
+    font-size:11px;
+    color:#64748b;
+    border-top:1px solid #e5e7eb;
+    background:#ffffff;
+}
+
+/* ===== PRINT STYLES ===== */
+@media print{
+    body{
+        background:#fff;
+    }
+    .page{
+        margin:0;
+        padding:0;
+    }
+    .card{
+        border:none;
+        padding:16px;
+    }
+    .header{
+        padding:10px 0;
+    }
+    .header-inner{
+        padding:10px 16px;
+    }
+    .footer{
+        margin-top:20px;
+        padding:10px 0;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- HEADER -->
+<div class="header">
+    <div class="header-inner">
+        <div class="logo">My WordPress Site</div>
+        
+    </div>
+</div>
+
+<div class="page">
+
+    <div class="card">
+
+        <h1>Contract Agreement</h1>
+        <div class="subtitle">
+            Contract #88 - Please review the session details and confirm to proceed with payment.
+        </div>
+
+        <!-- Educator -->
+        <div class="section">
+            <h3>Educator Details</h3>
+            <div class="info-group">
+                <div class="info-row">
+                    <span>Name</span>
+                    <strong>sanyam jain</strong>
+                </div>
+                <div class="info-row">
+                    <span>College</span>
+                    <strong>jain78790@gmail.com</strong>
+                </div>
+                <div class="info-row">
+                    <span>Topic</span>
+                    <strong>New</strong>
+                </div>
+                <div class="info-row">
+                    <span>Session Type</span>
+                    <strong>One-on-One Tutoring</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session -->
+        <div class="section">
+            <h3>Session Details</h3>
+            <div class="info-group">
+                <div class="info-row">
+                    <span>Date/Time</span>
+                    <strong>2026-01-09 14:00</strong>
+                </div>
+                <div class="info-row">
+                    <span>Duration</span>
+                    <strong>30 minutes</strong>
+                </div>
+                <div class="info-row">
+                    <span>Mode</span>
+                    <strong>Online</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment -->
+        <div class="section">
+            <h3>Payment Summary</h3>
+            <div class="payment-box">
+                <div class="payment-row total">
+                    <span>Total Amount</span>
+                    <span><span class="woocommerce-Price-amount amount"><bdi><span class="woocommerce-Price-currencySymbol">&#8377;</span>1,200.00</bdi></span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms -->
+        <div class="section">
+            <h3>Terms & Conditions</h3>
+            <div class="terms">
+                <p>Standard service terms apply. Cancellations 48h prior receive full refund; otherwise 50% fee.</p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <button class="download" onclick="window.print()">Download Contract</button>
+        </div>
+
+    </div>
+</div>
+
+<div class="footer">
+    <p></p>
+    <p>Generated by platform-core · Flow 7</p>
+</div>
+
+<script>
+// Optional: Add print-specific styling
+window.onbeforeprint = function() {
+    document.querySelector('.header').style.display = 'none';
+    document.querySelector('.actions').style.display = 'none';
+};
+
+window.onafterprint = function() {
+    document.querySelector('.header').style.display = 'block';
+    document.querySelector('.actions').style.display = 'flex';
+};
+</script>
+
+</body>
+</html>

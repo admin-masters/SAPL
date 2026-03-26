@@ -1,0 +1,66 @@
+/*
+ * assets/css/shortlisted-educators.css
+ * Scoped entirely to .fe-wrapper — cannot affect other pages.
+ */
+
+/* Hidden state for search filter */
+.fe-wrapper .hidden { display: none !important; }
+
+/* ── Compact card ── */
+.fe-wrapper .educator-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    transition: box-shadow .2s, transform .2s;
+}
+.fe-wrapper .educator-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    transform: translateY(-1px);
+}
+
+/* ── Actions row ── */
+.fe-wrapper .edu-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+/* ── Hide the separate plain profile link ── */
+.fe-wrapper .edu-actions a:not(.book-btn) {
+    display: none;
+}
+
+/* ── Book button becomes the single combined CTA ── */
+.fe-wrapper .edu-actions .book-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: background .15s;
+    white-space: nowrap;
+}
+.fe-wrapper .edu-actions .book-btn::after {
+    content: " & View Profile";
+}
+.fe-wrapper .edu-actions .book-btn:hover {
+    background: #1e293b;
+    color: #fff;
+    text-decoration: none;
+}
+
+/* ── Availability: colour the existing strong text ── */
+.fe-wrapper .detail:first-child strong {
+    color: #16a34a;
+}

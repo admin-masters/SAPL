@@ -1,0 +1,1 @@
+import{u}from"./hooks-1.0.63-CWs3kTdT.js";import{l as a}from"./lib-1.0.63-DJZPtMem.js";const b=l=>{const e=u(s=>{var r,o,t;return((t=(o=(r=s.tables)==null?void 0:r[l])==null?void 0:o.state)==null?void 0:t.sortedColumns)??[]});return a.debug("tableColumnOrder",e),e};export{b as u};

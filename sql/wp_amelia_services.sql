@@ -1,0 +1,40 @@
+-- rewind begin page null
+CREATE TABLE `wp_amelia_services` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL DEFAULT '',
+  `description` mediumtext DEFAULT NULL,
+  `color` varchar(255) NOT NULL DEFAULT '',
+  `price` double NOT NULL,
+  `status` enum('hidden','visible','disabled') NOT NULL DEFAULT 'visible',
+  `categoryId` int(11) NOT NULL,
+  `minCapacity` int(11) NOT NULL,
+  `maxCapacity` int(11) NOT NULL,
+  `duration` int(11) NOT NULL,
+  `timeBefore` int(11) DEFAULT 0,
+  `timeAfter` int(11) DEFAULT 0,
+  `bringingAnyone` tinyint(1) DEFAULT 1,
+  `priority` enum('least_expensive','most_expensive','least_occupied','most_occupied') NOT NULL,
+  `pictureFullPath` varchar(767) DEFAULT NULL,
+  `pictureThumbPath` varchar(767) DEFAULT NULL,
+  `position` int(11) DEFAULT 0,
+  `show` tinyint(1) DEFAULT 1,
+  `aggregatedPrice` tinyint(1) DEFAULT 1,
+  `settings` mediumtext DEFAULT NULL,
+  `recurringCycle` enum('disabled','all','daily','weekly','monthly') DEFAULT 'disabled',
+  `recurringSub` enum('disabled','past','future','both') DEFAULT 'future',
+  `recurringPayment` int(3) DEFAULT 0,
+  `translations` text DEFAULT NULL,
+  `depositPayment` enum('disabled','fixed','percentage') DEFAULT 'disabled',
+  `depositPerPerson` tinyint(1) DEFAULT 1,
+  `deposit` double DEFAULT 0,
+  `fullPayment` tinyint(1) DEFAULT 0,
+  `mandatoryExtra` tinyint(1) DEFAULT 0,
+  `minSelectedExtras` int(11) DEFAULT 0,
+  `customPricing` text DEFAULT NULL,
+  `maxExtraPeople` int(11) DEFAULT NULL,
+  `limitPerCustomer` text DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+INSERT INTO `wp_amelia_services` (`id`,`name`,`description`,`color`,`price`,`status`,`categoryId`,`minCapacity`,`maxCapacity`,`duration`,`timeBefore`,`timeAfter`,`bringingAnyone`,`priority`,`pictureFullPath`,`pictureThumbPath`,`position`,`show`,`aggregatedPrice`,`settings`,`recurringCycle`,`recurringSub`,`recurringPayment`,`translations`,`depositPayment`,`depositPerPerson`,`deposit`,`fullPayment`,`mandatoryExtra`,`minSelectedExtras`,`customPricing`,`maxExtraPeople`,`limitPerCustomer`) VALUES('1','Private tutorial','','#1788FB','500','visible','1','1','1','3600',NULL,NULL,'1','least_expensive',NULL,NULL,'8','1','1','{\"payments\":{\"paymentLinks\":{\"enabled\":false,\"changeBookingStatus\":false,\"redirectUrl\":null}},\"zoom\":{\"enabled\":true},\"lessonSpace\":{\"enabled\":false},\"googleMeet\":{\"enabled\":false},\"microsoftTeams\":{\"enabled\":false},\"general\":{\"defaultAppointmentStatus\":\"pending\"},\"activation\":{\"version\":\"8.7\"},\"waitingList\":{\"enabled\":false,\"maxCapacity\":1,\"maxExtraPeopleEnabled\":false,\"maxExtraPeople\":0}}','disabled','future','0',NULL,'disabled','1','0','0','0',NULL,'{\"enabled\":null,\"durations\":{},\"persons\":{},\"periods\":{\"default\":[],\"custom\":[]}}',NULL,'{\"enabled\":false,\"numberOfApp\":1,\"timeFrame\":\"day\",\"period\":1,\"from\":\"bookingDate\"}');
+INSERT INTO `wp_amelia_services` (`id`,`name`,`description`,`color`,`price`,`status`,`categoryId`,`minCapacity`,`maxCapacity`,`duration`,`timeBefore`,`timeAfter`,`bringingAnyone`,`priority`,`pictureFullPath`,`pictureThumbPath`,`position`,`show`,`aggregatedPrice`,`settings`,`recurringCycle`,`recurringSub`,`recurringPayment`,`translations`,`depositPayment`,`depositPerPerson`,`deposit`,`fullPayment`,`mandatoryExtra`,`minSelectedExtras`,`customPricing`,`maxExtraPeople`,`limitPerCustomer`) VALUES('6','Remote College Class','','#1788FB','1800','visible','1','1','100','3600',NULL,NULL,'1','least_expensive',NULL,NULL,'3','1','1','{\"payments\":{\"onSite\":false,\"paymentLinks\":{\"enabled\":false,\"changeBookingStatus\":false,\"redirectUrl\":null}},\"zoom\":{\"enabled\":true},\"lessonSpace\":{\"enabled\":false},\"googleMeet\":{\"enabled\":false},\"microsoftTeams\":{\"enabled\":false},\"activation\":{\"version\":\"8.7\"},\"waitingList\":{\"enabled\":false,\"maxCapacity\":1,\"maxExtraPeopleEnabled\":false,\"maxExtraPeople\":0},\"general\":{\"defaultAppointmentStatus\":\"approved\",\"minimumTimeRequirementPriorToBooking\":7200}}','disabled','future','0',NULL,'disabled','1','0','0','0',NULL,'{\"enabled\":\"duration\",\"durations\":{\"1800\":{\"price\":1000,\"rules\":[]},\"5400\":{\"price\":2500,\"rules\":[]}},\"persons\":{},\"periods\":{\"default\":[],\"custom\":[]}}',NULL,'{\"enabled\":false,\"numberOfApp\":1,\"timeFrame\":\"day\",\"period\":1,\"from\":\"bookingDate\"}');
+-- rewind end page null

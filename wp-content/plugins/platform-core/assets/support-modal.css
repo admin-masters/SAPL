@@ -1,0 +1,16 @@
+#platform-support-launcher .psp-fab {
+  position: fixed; right: 18px; bottom: 18px;
+  border: 0; border-radius: 999px; padding: 12px 16px;
+  font-weight: 600; cursor: pointer;
+}
+.psp-modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; }
+.psp-modal[aria-hidden="false"] { display: block; }
+.psp-modal__window { background: #fff; width: 420px; max-width: calc(100% - 24px);
+  border-radius: 10px; padding: 18px; position: absolute; right: 16px; bottom: 80px; box-shadow: 0 10px 30px rgba(0,0,0,.2);}
+.psp-close { position: absolute; top: 8px; right: 8px; background: transparent; border: 0; font-size: 22px; cursor: pointer;}
+.psp-topics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.psp-topics button, .psp-primary, .psp-secondary { padding: 10px 12px; border-radius: 8px; border: 1px solid #ddd; cursor: pointer; }
+.psp-primary { background: #f0f6ff; border-color: #cfe1ff; font-weight: 600; }
+.psp-secondary { background: #fafafa; }
+.psp-status { margin-top: 8px; min-height: 20px; font-size: 14px; }
+.psp-step[hidden] { display: none !important; }

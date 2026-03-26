@@ -1,0 +1,1 @@
+import{E as r}from"./Typography-1.0.63-mecuj_Wl.js";function p(t){const{theme:o,name:e,props:n}=t;return!o||!o.components||!o.components[e]||!o.components[e].defaultProps?n:r(o.components[e].defaultProps,n)}export{p as g};

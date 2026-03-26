@@ -1,0 +1,6 @@
+.peh { margin: 1rem 0; }
+.peh-tabs { display:flex; gap:.5rem; border-bottom:1px solid #eee; }
+.peh-tab { padding:.5rem .75rem; border:1px solid #ddd; border-bottom:none; background:#fafafa; cursor:pointer; }
+.peh-tab.active { background:#fff; border-bottom:1px solid #fff; }
+.peh-panel { padding:1rem; border:1px solid #ddd; background:#fff; }
+.peh-panel[hidden] { display:none !important; }
