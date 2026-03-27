@@ -1,0 +1,13 @@
+.git-ftp-ignore
+.DS_Store
+*/.DS_Store
+Thumbs.db
+*/Thumbs.db
+.env
+.env.*
+.envrc
+*.local.php
+local-config*.php
+.wp-env.json
+wp-cli*.yml
+wp-cli*.yaml

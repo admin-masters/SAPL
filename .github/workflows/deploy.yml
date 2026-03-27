@@ -26,43 +26,60 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Deploy wp-content over SFTP
-        uses: Automattic/FTP-Deploy-Action@3.1.2
-        with:
-          ftp-server: sftp://${{ secrets.FTP_SERVER }}/${{ secrets.FTP_SERVER_DIR }}/wp-content/
-          ftp-username: ${{ secrets.FTP_USERNAME }}
-          ftp-password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./wp-content/
-          state-name: .ftp-deploy-sync-state.json
-          log-level: standard
-          known-hosts: "\
-            sftp.wp.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQAB\
-            AAABAQDwfT/YEhOKO2Z0+XrjRqUS5Q2Ali6AlhOhZtzlIfMOvm03Sype\
-            DJH70tlUHasS+nm0SnZ01fOiEeAXa91ZhMihIYUT3nTGuiA2J3uVYsyS\
-            CJefvhWc0kg1FbEus3V3cVmx4e3XctdkzLbOgPNngypZocbP+8yCpbx6\
-            Kb9lihmgTjgGn2QzbK1enRSzsN/CbjVhej9jwukbrWqdCrQsKAsoZ2p6\
-            YCtcKbHS+Yy4RwcO9PxZUBkeMXUrejms027bRcdVfwf55hWSD9xYEHpE\
-            HupkSL4ofWs3UKeRGz+jCCzl7Nu0S6VSwK4Zzll0auHI0Hwh8WKTJbSn\
-            1gxCdF93/rmP\
-          "
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.DS_Store
-            **/Thumbs.db
-            **/.env
-            **/.env.*
-            **/.envrc
-            **/.vscode/**
-            **/.idea/**
-            **/.ddev/**
-            **/.wp-env.json
-            **/docker-compose*.yml
-            **/compose*.yml
-            **/*.local.php
-            **/local-config*.php
-            **/wp-cli*.yml
-            **/wp-cli*.yaml
+      - name: Install deployment tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes git-ftp curl
+
+      - name: Configure SFTP host key
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.ssh"
+          chmod 700 "${HOME}/.ssh"
+          cat <<'EOF' > "${HOME}/.ssh/known_hosts"
+          sftp.wp.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDwfT/YEhOKO2Z0+XrjRqUS5Q2Ali6AlhOhZtzlIfMOvm03SypeDJH70tlUHasS+nm0SnZ01fOiEeAXa91ZhMihIYUT3nTGuiA2J3uVYsySCJefvhWc0kg1FbEus3V3cVmx4e3XctdkzLbOgPNngypZocbP+8yCpbx6Kb9lihmgTjgGn2QzbK1enRSzsN/CbjVhej9jwukbrWqdCrQsKAsoZ2p6YCtcKbHS+Yy4RwcO9PxZUBkeMXUrejms027bRcdVfwf55hWSD9xYEHpEHupkSL4ofWs3UKeRGz+jCCzl7Nu0S6VSwK4Zzll0auHI0Hwh8WKTJbSn1gxCdF93/rmP
+          EOF
+          chmod 600 "${HOME}/.ssh/known_hosts"
+
+      - name: Deploy changed wp-content files with git-ftp
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          GITHUB_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          git config git-ftp.url "sftp://${FTP_SERVER}:${FTP_PORT}/${FTP_SERVER_DIR}/wp-content/"
+          git config git-ftp.user "${FTP_USERNAME}"
+          git config git-ftp.password "${FTP_PASSWORD}"
+          git config git-ftp.syncroot "wp-content/"
+
+          seeded_baseline=""
+
+          if git ftp show >/dev/null 2>&1; then
+            echo "Remote deploy state already exists."
+          else
+            if [[ -n "${GITHUB_BEFORE_SHA}" && ! "${GITHUB_BEFORE_SHA}" =~ ^0+$ ]] && git cat-file -e "${GITHUB_BEFORE_SHA}^{commit}" 2>/dev/null; then
+              echo "No remote deploy state found; seeding baseline to ${GITHUB_BEFORE_SHA}."
+              git ftp catchup --force --commit "${GITHUB_BEFORE_SHA}"
+              seeded_baseline="${GITHUB_BEFORE_SHA}"
+            else
+              echo "No remote deploy state found, and no safe baseline commit is available."
+              exit 1
+            fi
+          fi
+
+          if [[ -n "${seeded_baseline}" ]] && git diff --quiet "${seeded_baseline}" "${GITHUB_AFTER_SHA}" -- wp-content; then
+            echo "No wp-content changes in this push; advancing deploy state only."
+            git ftp catchup --force --commit "${GITHUB_AFTER_SHA}"
+          else
+            git ftp push --force --lock --verbose
+          fi
 
       - name: Confirm deployment completed
         run: echo "SFTP deployment completed for commit ${GITHUB_SHA}"
