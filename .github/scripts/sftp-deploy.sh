@@ -18,11 +18,9 @@ normalize_remote_root() {
   dir="${dir%/}"
 
   if [[ -z "$dir" ]]; then
-    printf '/'
-  elif [[ "$dir" == "." ]]; then
     printf '.'
   else
-    printf '/%s' "${dir#/}"
+    printf '%s' "$dir"
   fi
 }
 
@@ -87,7 +85,6 @@ set net:reconnect-interval-max 30
 set net:persist-retries 1
 set sftp:auto-confirm yes
 open -u "$(lftp_escape "$FTP_USERNAME")","$(lftp_escape "$FTP_PASSWORD")" -p "$(lftp_escape "$FTP_PORT")" "sftp://$(lftp_escape "$FTP_SERVER")"
-mkdir -p "$(lftp_escape "$remote_root")"
 cd "$(lftp_escape "$remote_root")"
 cat "$(lftp_escape "$DEPLOY_STATE_FILE")"
 bye
@@ -136,7 +133,6 @@ append_cmd "set net:reconnect-interval-max 30"
 append_cmd "set net:persist-retries 2"
 append_cmd "set sftp:auto-confirm yes"
 append_cmd "open -u \"$(lftp_escape "$FTP_USERNAME")\",\"$(lftp_escape "$FTP_PASSWORD")\" -p \"$(lftp_escape "$FTP_PORT")\" \"sftp://$(lftp_escape "$FTP_SERVER")\""
-append_cmd "mkdir -p \"$(lftp_escape "$remote_root")\""
 append_cmd "cd \"$(lftp_escape "$remote_root")\""
 
 if ! git cat-file -e "${GITHUB_AFTER_SHA}^{commit}" 2>/dev/null; then
