@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Rsync Deploy
+    name: SSH Delta Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes sshpass rsync curl
+          sudo apt-get install --yes sshpass curl
 
       - name: Configure SFTP host key
         env:
@@ -43,62 +43,140 @@ jobs:
           ssh-keyscan -p "${FTP_PORT}" "${FTP_SERVER}" > "${HOME}/.ssh/known_hosts"
           chmod 600 "${HOME}/.ssh/known_hosts"
 
-      - name: Deploy wp-content code folders with rsync
+      - name: Deploy changed wp-content code files over SSH
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          GITHUB_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_AFTER_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
+          export SSHPASS="${FTP_PASSWORD}"
+          ssh_cmd=(
+            sshpass -e ssh
+            -p "${FTP_PORT}"
+            -o PreferredAuthentications=password
+            -o PubkeyAuthentication=no
+            -o KbdInteractiveAuthentication=no
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts"
+            "${FTP_USERNAME}@${FTP_SERVER}"
+          )
+
+          if [[ -z "${GITHUB_BEFORE_SHA}" || "${GITHUB_BEFORE_SHA}" =~ ^0+$ ]] || ! git cat-file -e "${GITHUB_BEFORE_SHA}^{commit}" 2>/dev/null; then
+            echo "No safe baseline commit is available for changed-file deployment."
+            exit 1
+          fi
+
+          remote_home="$("${ssh_cmd[@]}" 'printf %s "$HOME"')"
           remote_dir="${FTP_SERVER_DIR%/}"
 
           case "${remote_dir}" in
             ""|"."|"./"|"~"|"/~"|"htdocs"|"/htdocs"|"/srv/htdocs")
-              remote_root="~/wp-content"
+              remote_extract_root="${remote_home}"
               ;;
             *)
-              remote_root="${remote_dir#/}/wp-content"
+              remote_extract_root="${remote_home}/${remote_dir#/}"
               ;;
           esac
 
-          export SSHPASS="${FTP_PASSWORD}"
-          rsync_ssh="ssh -p ${FTP_PORT} -o PreferredAuthentications=password -o PubkeyAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${HOME}/.ssh/known_hosts"
+          should_skip() {
+            local path="$1"
 
-          sync_dir() {
-            local source_dir="$1"
-            local target_dir="$2"
+            case "$path" in
+              *.DS_Store|*/.DS_Store|Thumbs.db|*/Thumbs.db|*.local.php|*/local-config*.php|local-config*.php|*.env|*.env.*|.env|.env.*|.envrc|*.wp-env.json|.wp-env.json|wp-cli*.yml|wp-cli*.yaml|*/wp-cli*.yml|*/wp-cli*.yaml)
+                return 0
+                ;;
+            esac
 
-            if [[ ! -d "${source_dir}" ]]; then
-              echo "Skipping missing directory ${source_dir}"
-              return 0
-            fi
-
-            echo "Syncing ${source_dir} -> ${target_dir}"
-
-            sshpass -e rsync \
-              --archive \
-              --compress \
-              --delete \
-              --delete-delay \
-              --human-readable \
-              --itemize-changes \
-              --omit-dir-times \
-              --rsync-path=/usr/bin/rsync \
-              --exclude-from=".rsync-exclude" \
-              -e "${rsync_ssh}" \
-              "${source_dir}/" \
-              "${FTP_USERNAME}@${FTP_SERVER}:${target_dir}/"
+            return 1
           }
 
-          sync_dir "wp-content/mu-plugins" "${remote_root}/mu-plugins"
-          sync_dir "wp-content/plugins" "${remote_root}/plugins"
-          sync_dir "wp-content/themes" "${remote_root}/themes"
+          stage_dir="$(mktemp -d)"
+          archive_file="$(mktemp)"
+          trap 'rm -rf "${stage_dir}"; rm -f "${archive_file}"' EXIT
+
+          changed_count=0
+          deleted_count=0
+          deleted_list="$(mktemp)"
+          trap 'rm -rf "${stage_dir}"; rm -f "${archive_file}" "${deleted_list}"' EXIT
+
+          while IFS= read -r -d '' status; do
+            case "$status" in
+              R*)
+                IFS= read -r -d '' old_path
+                IFS= read -r -d '' new_path
+                if ! should_skip "$old_path"; then
+                  printf '%s\n' "$old_path" >> "${deleted_list}"
+                  deleted_count=$((deleted_count + 1))
+                fi
+                if [[ -f "$new_path" ]] && ! should_skip "$new_path"; then
+                  mkdir -p "${stage_dir}/$(dirname "$new_path")"
+                  cp -p "$new_path" "${stage_dir}/${new_path}"
+                  changed_count=$((changed_count + 1))
+                fi
+                ;;
+              C*)
+                IFS= read -r -d '' _old_path
+                IFS= read -r -d '' new_path
+                if [[ -f "$new_path" ]] && ! should_skip "$new_path"; then
+                  mkdir -p "${stage_dir}/$(dirname "$new_path")"
+                  cp -p "$new_path" "${stage_dir}/${new_path}"
+                  changed_count=$((changed_count + 1))
+                fi
+                ;;
+              D)
+                IFS= read -r -d '' path
+                if ! should_skip "$path"; then
+                  printf '%s\n' "$path" >> "${deleted_list}"
+                  deleted_count=$((deleted_count + 1))
+                fi
+                ;;
+              *)
+                IFS= read -r -d '' path
+                if [[ -f "$path" ]] && ! should_skip "$path"; then
+                  mkdir -p "${stage_dir}/$(dirname "$path")"
+                  cp -p "$path" "${stage_dir}/${path}"
+                  changed_count=$((changed_count + 1))
+                fi
+                ;;
+            esac
+          done < <(
+            git diff --name-status -z --find-renames "${GITHUB_BEFORE_SHA}" "${GITHUB_AFTER_SHA}" -- \
+              wp-content/mu-plugins \
+              wp-content/plugins \
+              wp-content/themes
+          )
+
+          if [[ "${changed_count}" -eq 0 && "${deleted_count}" -eq 0 ]]; then
+            echo "No deployable wp-content code changes detected."
+            exit 0
+          fi
+
+          echo "Preparing ${changed_count} uploads and ${deleted_count} deletions."
+
+          "${ssh_cmd[@]}" "mkdir -p \"${remote_extract_root}/wp-content\""
+
+          if [[ "${changed_count}" -gt 0 ]]; then
+            tar -czf "${archive_file}" -C "${stage_dir}" .
+            cat "${archive_file}" | "${ssh_cmd[@]}" "tar -xzf - -C \"${remote_extract_root}\""
+          fi
+
+          if [[ "${deleted_count}" -gt 0 ]]; then
+            while IFS= read -r deleted_path; do
+              [[ -n "${deleted_path}" ]] || continue
+              remote_target="${remote_extract_root}/${deleted_path}"
+              remote_target_quoted="$(printf '%q' "${remote_target}")"
+              "${ssh_cmd[@]}" "rm -rf -- ${remote_target_quoted}"
+            done < "${deleted_list}"
+          fi
 
       - name: Confirm deployment completed
-        run: echo "Rsync deployment completed for commit ${GITHUB_SHA}"
+        run: echo "SSH delta deployment completed for commit ${GITHUB_SHA}"
 
       - name: Verify site is responding
         if: ${{ env.DEPLOY_HEALTHCHECK_URL != '' }}
