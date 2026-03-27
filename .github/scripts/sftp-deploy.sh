@@ -60,8 +60,8 @@ declare -i upload_count=0
 declare -i delete_count=0
 
 lftp_script="$(mktemp)"
-state_file_local="$(mktemp)"
-trap 'rm -f "$lftp_script" "$state_file_local"' EXIT
+stage_root="$(mktemp -d)"
+trap 'rm -f "$lftp_script"; rm -rf "$stage_root"' EXIT
 
 append_cmd() {
   printf '%s\n' "$1" >> "$lftp_script"
@@ -94,16 +94,15 @@ EOF
   fi
 }
 
-queue_upload() {
+stage_upload() {
   local path="$1"
-  local remote_dir
+  local target_path="$stage_root/$path"
 
   [[ -f "$path" ]] || return 0
   should_exclude "$path" && return 0
 
-  remote_dir="$(dirname "$path")"
-  append_cmd "mkdir -p \"$(lftp_escape "$remote_dir")\""
-  append_cmd "put -O \"$(lftp_escape "$remote_dir")\" \"$(lftp_escape "$path")\""
+  mkdir -p "$(dirname "$target_path")"
+  cp -p "$path" "$target_path"
   upload_count+=1
 }
 
@@ -114,6 +113,13 @@ queue_delete() {
 
   append_cmd "rm -f \"$(lftp_escape "$path")\""
   delete_count+=1
+}
+
+write_stage_deploy_state() {
+  local state_path="$stage_root/$DEPLOY_STATE_FILE"
+
+  mkdir -p "$(dirname "$state_path")"
+  printf '%s\n' "$GITHUB_AFTER_SHA" > "$state_path"
 }
 
 append_cmd "set cmd:fail-exit yes"
@@ -141,7 +147,7 @@ if [[ -n "$remote_deployed_sha" ]]; then
         IFS= read -r -d '' old_path
         IFS= read -r -d '' new_path
         queue_delete "$old_path"
-        queue_upload "$new_path"
+        stage_upload "$new_path"
         ;;
       D)
         IFS= read -r -d '' path
@@ -149,14 +155,14 @@ if [[ -n "$remote_deployed_sha" ]]; then
         ;;
       *)
         IFS= read -r -d '' path
-        queue_upload "$path"
+        stage_upload "$path"
         ;;
     esac
   done < <(git diff --name-status -z --find-renames "${remote_deployed_sha}" "${GITHUB_AFTER_SHA}" --)
 else
   echo "Running initial full deploy from tracked files."
   while IFS= read -r -d '' path; do
-    queue_upload "$path"
+    stage_upload "$path"
   done < <(git ls-files -z)
 fi
 
@@ -165,8 +171,8 @@ if (( upload_count == 0 && delete_count == 0 )) && [[ "${remote_deployed_sha:-}"
   exit 0
 fi
 
-printf '%s\n' "$GITHUB_AFTER_SHA" > "$state_file_local"
-append_cmd "put -o \"$(lftp_escape "$DEPLOY_STATE_FILE")\" \"$(lftp_escape "$state_file_local")\""
+write_stage_deploy_state
+append_cmd "mirror -R --verbose=1 --parallel=1 --no-perms --no-umask \"$(lftp_escape "$stage_root")\" ."
 append_cmd "bye"
 
 if (( upload_count == 0 && delete_count == 0 )); then
