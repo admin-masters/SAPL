@@ -1,0 +1,60 @@
+name: SFTP Login Check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  login-check:
+    name: Verify SFTP Login
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Install SSH tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes sshpass
+
+      - name: Verify SFTP login only
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${FTP_SERVER}" || -z "${FTP_PORT}" || -z "${FTP_USERNAME}" || -z "${FTP_PASSWORD}" ]]; then
+            echo "Missing one or more required SFTP secrets."
+            exit 1
+          fi
+
+          output="$(
+            sshpass -p "${FTP_PASSWORD}" sftp \
+              -b - \
+              -P "${FTP_PORT}" \
+              -o PreferredAuthentications=password \
+              -o PubkeyAuthentication=no \
+              -o KbdInteractiveAuthentication=no \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile="${RUNNER_TEMP}/known_hosts" \
+              -o ConnectTimeout=20 \
+              "${FTP_USERNAME}@${FTP_SERVER}" <<'EOF'
+          pwd
+          ls
+          bye
+          EOF
+          )"
+
+          printf '%s\n' "${output}"
+
+          if grep -q 'wp-content' <<<"${output}"; then
+            echo "SFTP login check passed."
+          else
+            echo "SFTP login succeeded, but wp-content was not found in the directory listing."
+            exit 1
+          fi
