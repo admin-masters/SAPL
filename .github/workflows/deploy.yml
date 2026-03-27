@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: SFTP Deploy
+    name: Rsync Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -30,27 +30,26 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes git-ftp curl
+          sudo apt-get install --yes sshpass rsync curl
 
       - name: Configure SFTP host key
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
         run: |
           set -euo pipefail
           mkdir -p "${HOME}/.ssh"
           chmod 700 "${HOME}/.ssh"
-          cat <<'EOF' > "${HOME}/.ssh/known_hosts"
-          sftp.wp.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDwfT/YEhOKO2Z0+XrjRqUS5Q2Ali6AlhOhZtzlIfMOvm03SypeDJH70tlUHasS+nm0SnZ01fOiEeAXa91ZhMihIYUT3nTGuiA2J3uVYsySCJefvhWc0kg1FbEus3V3cVmx4e3XctdkzLbOgPNngypZocbP+8yCpbx6Kb9lihmgTjgGn2QzbK1enRSzsN/CbjVhej9jwukbrWqdCrQsKAsoZ2p6YCtcKbHS+Yy4RwcO9PxZUBkeMXUrejms027bRcdVfwf55hWSD9xYEHpEHupkSL4ofWs3UKeRGz+jCCzl7Nu0S6VSwK4Zzll0auHI0Hwh8WKTJbSn1gxCdF93/rmP
-          EOF
+          ssh-keyscan -p "${FTP_PORT}" "${FTP_SERVER}" > "${HOME}/.ssh/known_hosts"
           chmod 600 "${HOME}/.ssh/known_hosts"
 
-      - name: Deploy changed wp-content files with git-ftp
+      - name: Deploy wp-content code folders with rsync
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
-          GITHUB_BEFORE_SHA: ${{ github.event.before }}
-          GITHUB_AFTER_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
@@ -58,44 +57,47 @@ jobs:
 
           case "${remote_dir}" in
             ""|"."|"./"|"~"|"/~"|"htdocs"|"/htdocs"|"/srv/htdocs")
-              remote_url="sftp://${FTP_SERVER}:${FTP_PORT}/~/wp-content/"
+              remote_root="~/wp-content"
               ;;
             *)
-              remote_url="sftp://${FTP_SERVER}:${FTP_PORT}/${remote_dir#/}/wp-content/"
+              remote_root="${remote_dir#/}/wp-content"
               ;;
           esac
 
-          echo "Deploying to ${remote_url}"
+          export SSHPASS="${FTP_PASSWORD}"
+          rsync_ssh="ssh -p ${FTP_PORT} -o PreferredAuthentications=password -o PubkeyAuthentication=no -o KbdInteractiveAuthentication=no -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${HOME}/.ssh/known_hosts"
 
-          git config git-ftp.url "${remote_url}"
-          git config git-ftp.user "${FTP_USERNAME}"
-          git config git-ftp.password "${FTP_PASSWORD}"
-          git config git-ftp.syncroot "wp-content/"
+          sync_dir() {
+            local source_dir="$1"
+            local target_dir="$2"
 
-          seeded_baseline=""
-
-          if git ftp show >/dev/null 2>&1; then
-            echo "Remote deploy state already exists."
-          else
-            if [[ -n "${GITHUB_BEFORE_SHA}" && ! "${GITHUB_BEFORE_SHA}" =~ ^0+$ ]] && git cat-file -e "${GITHUB_BEFORE_SHA}^{commit}" 2>/dev/null; then
-              echo "No remote deploy state found; seeding baseline to ${GITHUB_BEFORE_SHA}."
-              git ftp catchup --force --commit "${GITHUB_BEFORE_SHA}"
-              seeded_baseline="${GITHUB_BEFORE_SHA}"
-            else
-              echo "No remote deploy state found, and no safe baseline commit is available."
-              exit 1
+            if [[ ! -d "${source_dir}" ]]; then
+              echo "Skipping missing directory ${source_dir}"
+              return 0
             fi
-          fi
 
-          if [[ -n "${seeded_baseline}" ]] && git diff --quiet "${seeded_baseline}" "${GITHUB_AFTER_SHA}" -- wp-content; then
-            echo "No wp-content changes in this push; advancing deploy state only."
-            git ftp catchup --force --commit "${GITHUB_AFTER_SHA}"
-          else
-            git ftp push --force --lock --verbose
-          fi
+            echo "Syncing ${source_dir} -> ${target_dir}"
+
+            sshpass -e rsync \
+              --archive \
+              --compress \
+              --delete \
+              --delete-delay \
+              --human-readable \
+              --itemize-changes \
+              --omit-dir-times \
+              --exclude-from=".rsync-exclude" \
+              -e "${rsync_ssh}" \
+              "${source_dir}/" \
+              "${FTP_USERNAME}@${FTP_SERVER}:${target_dir}/"
+          }
+
+          sync_dir "wp-content/mu-plugins" "${remote_root}/mu-plugins"
+          sync_dir "wp-content/plugins" "${remote_root}/plugins"
+          sync_dir "wp-content/themes" "${remote_root}/themes"
 
       - name: Confirm deployment completed
-        run: echo "SFTP deployment completed for commit ${GITHUB_SHA}"
+        run: echo "Rsync deployment completed for commit ${GITHUB_SHA}"
 
       - name: Verify site is responding
         if: ${{ env.DEPLOY_HEALTHCHECK_URL != '' }}
