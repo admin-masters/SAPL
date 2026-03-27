@@ -6,9 +6,11 @@ FTP_USERNAME="${FTP_USERNAME:?FTP_USERNAME is required}"
 FTP_PASSWORD="${FTP_PASSWORD:?FTP_PASSWORD is required}"
 FTP_SERVER_DIR="${FTP_SERVER_DIR:?FTP_SERVER_DIR is required}"
 FTP_PORT="${FTP_PORT:-22}"
+GITHUB_BEFORE_SHA="${GITHUB_BEFORE_SHA:-}"
 GITHUB_AFTER_SHA="${GITHUB_AFTER_SHA:?GITHUB_AFTER_SHA is required}"
 IGNORE_FILE="${IGNORE_FILE:-.deployignore}"
 DEPLOY_STATE_FILE="${DEPLOY_STATE_FILE:-.github-actions-deploy-sha}"
+ALLOW_INITIAL_FULL_DEPLOY="${ALLOW_INITIAL_FULL_DEPLOY:-false}"
 
 normalize_remote_root() {
   local dir="$1"
@@ -54,6 +56,11 @@ should_exclude() {
 is_zero_sha() {
   local sha="${1:-}"
   [[ -z "$sha" || "$sha" =~ ^0+$ ]]
+}
+
+is_valid_commit() {
+  local sha="${1:-}"
+  [[ -n "$sha" ]] && git cat-file -e "${sha}^{commit}" 2>/dev/null
 }
 
 declare -i upload_count=0
@@ -159,11 +166,36 @@ if [[ -n "$remote_deployed_sha" ]]; then
         ;;
     esac
   done < <(git diff --name-status -z --find-renames "${remote_deployed_sha}" "${GITHUB_AFTER_SHA}" --)
-else
-  echo "Running initial full deploy from tracked files."
+elif ! is_zero_sha "$GITHUB_BEFORE_SHA" && is_valid_commit "$GITHUB_BEFORE_SHA"; then
+  echo "No remote deploy state found; using push baseline ${GITHUB_BEFORE_SHA}."
+  while IFS= read -r -d '' status; do
+    case "$status" in
+      R*|C*)
+        IFS= read -r -d '' old_path
+        IFS= read -r -d '' new_path
+        queue_delete "$old_path"
+        stage_upload "$new_path"
+        ;;
+      D)
+        IFS= read -r -d '' path
+        queue_delete "$path"
+        ;;
+      *)
+        IFS= read -r -d '' path
+        stage_upload "$path"
+        ;;
+    esac
+  done < <(git diff --name-status -z --find-renames "${GITHUB_BEFORE_SHA}" "${GITHUB_AFTER_SHA}" --)
+elif [[ "$ALLOW_INITIAL_FULL_DEPLOY" == "true" ]]; then
+  echo "No remote deploy state or push baseline found; running initial full deploy from tracked files."
   while IFS= read -r -d '' path; do
     stage_upload "$path"
   done < <(git ls-files -z)
+else
+  echo "No remote deploy state found, and no safe baseline commit is available."
+  echo "Skipping full upload to avoid overwriting an existing site unexpectedly."
+  echo "Set ALLOW_INITIAL_FULL_DEPLOY=true only if you really want a full first sync."
+  exit 1
 fi
 
 if (( upload_count == 0 && delete_count == 0 )) && [[ "${remote_deployed_sha:-}" == "${GITHUB_AFTER_SHA}" ]]; then
