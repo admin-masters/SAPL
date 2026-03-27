@@ -54,7 +54,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          git config git-ftp.url "sftp://${FTP_SERVER}:${FTP_PORT}/${FTP_SERVER_DIR}/wp-content/"
+          remote_dir="${FTP_SERVER_DIR%/}"
+
+          case "${remote_dir}" in
+            ""|"."|"./"|"~"|"/~"|"htdocs"|"/htdocs"|"/srv/htdocs")
+              remote_url="sftp://${FTP_SERVER}:${FTP_PORT}/~/wp-content/"
+              ;;
+            *)
+              remote_url="sftp://${FTP_SERVER}:${FTP_PORT}/${remote_dir#/}/wp-content/"
+              ;;
+          esac
+
+          echo "Deploying to ${remote_url}"
+
+          git config git-ftp.url "${remote_url}"
           git config git-ftp.user "${FTP_USERNAME}"
           git config git-ftp.password "${FTP_PASSWORD}"
           git config git-ftp.syncroot "wp-content/"
