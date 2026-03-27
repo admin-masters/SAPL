@@ -43,7 +43,7 @@ jobs:
           ssh-keyscan -p "${FTP_PORT}" "${FTP_SERVER}" > "${HOME}/.ssh/known_hosts"
           chmod 600 "${HOME}/.ssh/known_hosts"
 
-      - name: Deploy changed wp-content code files over SSH
+      - name: Deploy changed wp-content code files over SFTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
@@ -56,31 +56,20 @@ jobs:
           set -euo pipefail
 
           export SSHPASS="${FTP_PASSWORD}"
-          ssh_cmd=(
-            sshpass -e ssh
-            -p "${FTP_PORT}"
-            -o PreferredAuthentications=password
-            -o PubkeyAuthentication=no
-            -o KbdInteractiveAuthentication=no
-            -o StrictHostKeyChecking=yes
-            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts"
-            "${FTP_USERNAME}@${FTP_SERVER}"
-          )
 
           if [[ -z "${GITHUB_BEFORE_SHA}" || "${GITHUB_BEFORE_SHA}" =~ ^0+$ ]] || ! git cat-file -e "${GITHUB_BEFORE_SHA}^{commit}" 2>/dev/null; then
             echo "No safe baseline commit is available for changed-file deployment."
             exit 1
           fi
 
-          remote_home="$("${ssh_cmd[@]}" 'printf %s "$HOME"')"
           remote_dir="${FTP_SERVER_DIR%/}"
 
           case "${remote_dir}" in
             ""|"."|"./"|"~"|"/~"|"htdocs"|"/htdocs"|"/srv/htdocs")
-              remote_extract_root="${remote_home}"
+              remote_prefix=""
               ;;
             *)
-              remote_extract_root="${remote_home}/${remote_dir#/}"
+              remote_prefix="${remote_dir#/}"
               ;;
           esac
 
@@ -96,14 +85,44 @@ jobs:
             return 1
           }
 
-          stage_dir="$(mktemp -d)"
-          archive_file="$(mktemp)"
-          trap 'rm -rf "${stage_dir}"; rm -f "${archive_file}"' EXIT
-
           changed_count=0
           deleted_count=0
+          batch_file="$(mktemp)"
+          upload_list="$(mktemp)"
           deleted_list="$(mktemp)"
-          trap 'rm -rf "${stage_dir}"; rm -f "${archive_file}" "${deleted_list}"' EXIT
+          dir_list="$(mktemp)"
+          trap 'rm -f "${batch_file}" "${upload_list}" "${deleted_list}" "${dir_list}"' EXIT
+
+          sftp_cmd=(
+            sshpass -e sftp
+            -P "${FTP_PORT}"
+            -o PreferredAuthentications=password
+            -o PubkeyAuthentication=no
+            -o KbdInteractiveAuthentication=no
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts"
+            -b "${batch_file}"
+            "${FTP_USERNAME}@${FTP_SERVER}"
+          )
+
+          remote_path() {
+            local path="$1"
+
+            if [[ -z "${remote_prefix}" ]]; then
+              printf '%s' "${path}"
+            else
+              printf '%s/%s' "${remote_prefix}" "${path}"
+            fi
+          }
+
+          queue_remote_dir() {
+            local dir="$1"
+
+            while [[ -n "${dir}" && "${dir}" != "." && "${dir}" != "/" ]]; do
+              printf '%s\n' "${dir}" >> "${dir_list}"
+              dir="$(dirname "${dir}")"
+            done
+          }
 
           while IFS= read -r -d '' status; do
             case "$status" in
@@ -111,12 +130,13 @@ jobs:
                 IFS= read -r -d '' old_path
                 IFS= read -r -d '' new_path
                 if ! should_skip "$old_path"; then
-                  printf '%s\n' "$old_path" >> "${deleted_list}"
+                  printf '%s\n' "$(remote_path "$old_path")" >> "${deleted_list}"
                   deleted_count=$((deleted_count + 1))
                 fi
                 if [[ -f "$new_path" ]] && ! should_skip "$new_path"; then
-                  mkdir -p "${stage_dir}/$(dirname "$new_path")"
-                  cp -p "$new_path" "${stage_dir}/${new_path}"
+                  remote_target="$(remote_path "$new_path")"
+                  printf '%s\t%s\n' "$new_path" "$remote_target" >> "${upload_list}"
+                  queue_remote_dir "$(dirname "$remote_target")"
                   changed_count=$((changed_count + 1))
                 fi
                 ;;
@@ -124,23 +144,25 @@ jobs:
                 IFS= read -r -d '' _old_path
                 IFS= read -r -d '' new_path
                 if [[ -f "$new_path" ]] && ! should_skip "$new_path"; then
-                  mkdir -p "${stage_dir}/$(dirname "$new_path")"
-                  cp -p "$new_path" "${stage_dir}/${new_path}"
+                  remote_target="$(remote_path "$new_path")"
+                  printf '%s\t%s\n' "$new_path" "$remote_target" >> "${upload_list}"
+                  queue_remote_dir "$(dirname "$remote_target")"
                   changed_count=$((changed_count + 1))
                 fi
                 ;;
               D)
                 IFS= read -r -d '' path
                 if ! should_skip "$path"; then
-                  printf '%s\n' "$path" >> "${deleted_list}"
+                  printf '%s\n' "$(remote_path "$path")" >> "${deleted_list}"
                   deleted_count=$((deleted_count + 1))
                 fi
                 ;;
               *)
                 IFS= read -r -d '' path
                 if [[ -f "$path" ]] && ! should_skip "$path"; then
-                  mkdir -p "${stage_dir}/$(dirname "$path")"
-                  cp -p "$path" "${stage_dir}/${path}"
+                  remote_target="$(remote_path "$path")"
+                  printf '%s\t%s\n' "$path" "$remote_target" >> "${upload_list}"
+                  queue_remote_dir "$(dirname "$remote_target")"
                   changed_count=$((changed_count + 1))
                 fi
                 ;;
@@ -159,24 +181,32 @@ jobs:
 
           echo "Preparing ${changed_count} uploads and ${deleted_count} deletions."
 
-          "${ssh_cmd[@]}" "mkdir -p \"${remote_extract_root}/wp-content\""
+          if [[ -s "${dir_list}" ]]; then
+            awk '!seen[$0]++ { print length($0) "\t" $0 }' "${dir_list}" \
+              | sort -n \
+              | cut -f2- \
+              | while IFS= read -r remote_dir_path; do
+                  printf -- '-mkdir %s\n' "${remote_dir_path}" >> "${batch_file}"
+                done
+          fi
 
           if [[ "${changed_count}" -gt 0 ]]; then
-            tar -czf "${archive_file}" -C "${stage_dir}" .
-            cat "${archive_file}" | "${ssh_cmd[@]}" "tar -xzf - -C \"${remote_extract_root}\""
+            while IFS=$'\t' read -r local_path remote_target; do
+              printf 'put %s %s\n' "${local_path}" "${remote_target}" >> "${batch_file}"
+            done < "${upload_list}"
           fi
 
           if [[ "${deleted_count}" -gt 0 ]]; then
-            while IFS= read -r deleted_path; do
-              [[ -n "${deleted_path}" ]] || continue
-              remote_target="${remote_extract_root}/${deleted_path}"
-              remote_target_quoted="$(printf '%q' "${remote_target}")"
-              "${ssh_cmd[@]}" "rm -rf -- ${remote_target_quoted}"
+            while IFS= read -r remote_target; do
+              [[ -n "${remote_target}" ]] || continue
+              printf -- '-rm %s\n' "${remote_target}" >> "${batch_file}"
             done < "${deleted_list}"
           fi
 
+          "${sftp_cmd[@]}"
+
       - name: Confirm deployment completed
-        run: echo "SSH delta deployment completed for commit ${GITHUB_SHA}"
+        run: echo "SFTP delta deployment completed for commit ${GITHUB_SHA}"
 
       - name: Verify site is responding
         if: ${{ env.DEPLOY_HEALTHCHECK_URL != '' }}
