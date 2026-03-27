@@ -120,11 +120,14 @@ function pcore_decrypt($cipher) {
  * LIGHTWEIGHT HEALTHCHECK
  * ---------------------------------------------------------
  */
-add_action('template_redirect', function () {
-  if (!array_key_exists('healthcheck', $_GET)) {
-    return;
-  }
+function pcore_healthcheck_payload() {
+  return [
+    'status' => 'ok',
+    'service' => 'platform-core',
+  ];
+}
 
+function pcore_send_healthcheck_response() {
   nocache_headers();
   status_header(200);
   header('Content-Type: text/plain; charset=utf-8');
@@ -132,6 +135,24 @@ add_action('template_redirect', function () {
 
   echo 'platform-core-healthcheck-ok';
   exit;
+}
+
+add_action('rest_api_init', function () {
+  register_rest_route('platform-core/v1', '/healthcheck', [
+    'methods' => 'GET',
+    'callback' => function () {
+      return new WP_REST_Response(pcore_healthcheck_payload(), 200);
+    },
+    'permission_callback' => '__return_true',
+  ]);
+});
+
+add_action('template_redirect', function () {
+  if (!array_key_exists('healthcheck', $_GET)) {
+    return;
+  }
+
+  pcore_send_healthcheck_response();
 }, 0);
 
 /**
