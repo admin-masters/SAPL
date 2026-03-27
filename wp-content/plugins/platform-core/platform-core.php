@@ -117,6 +117,25 @@ function pcore_decrypt($cipher) {
 
 /**
  * ---------------------------------------------------------
+ * LIGHTWEIGHT HEALTHCHECK
+ * ---------------------------------------------------------
+ */
+add_action('template_redirect', function () {
+  if (!array_key_exists('healthcheck', $_GET)) {
+    return;
+  }
+
+  nocache_headers();
+  status_header(200);
+  header('Content-Type: text/plain; charset=utf-8');
+  header('X-Platform-Core-Healthcheck: ok');
+
+  echo 'platform-core-healthcheck-ok';
+  exit;
+}, 0);
+
+/**
+ * ---------------------------------------------------------
  * GOOGLE OAUTH (SECURE STORAGE)
  * ---------------------------------------------------------
  */
