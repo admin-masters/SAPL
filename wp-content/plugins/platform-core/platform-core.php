@@ -124,6 +124,7 @@ function pcore_healthcheck_payload() {
   return [
     'status' => 'ok',
     'service' => 'platform-core',
+    'revision' => 'healthcheck-v2',
   ];
 }
 
