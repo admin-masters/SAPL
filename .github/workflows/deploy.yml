@@ -86,6 +86,7 @@ jobs:
               --human-readable \
               --itemize-changes \
               --omit-dir-times \
+              --rsync-path=/usr/bin/rsync \
               --exclude-from=".rsync-exclude" \
               -e "${rsync_ssh}" \
               "${source_dir}/" \
