@@ -32,17 +32,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes sshpass curl
 
-      - name: Configure SFTP host key
-        env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
-          FTP_PORT: ${{ secrets.FTP_PORT }}
-        run: |
-          set -euo pipefail
-          mkdir -p "${HOME}/.ssh"
-          chmod 700 "${HOME}/.ssh"
-          ssh-keyscan -p "${FTP_PORT}" "${FTP_SERVER}" > "${HOME}/.ssh/known_hosts"
-          chmod 600 "${HOME}/.ssh/known_hosts"
-
       - name: Deploy changed wp-content code files over SFTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
@@ -54,8 +43,6 @@ jobs:
           GITHUB_AFTER_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-
-          export SSHPASS="${FTP_PASSWORD}"
 
           if [[ -z "${GITHUB_BEFORE_SHA}" || "${GITHUB_BEFORE_SHA}" =~ ^0+$ ]] || ! git cat-file -e "${GITHUB_BEFORE_SHA}^{commit}" 2>/dev/null; then
             echo "No safe baseline commit is available for changed-file deployment."
@@ -92,18 +79,6 @@ jobs:
           deleted_list="$(mktemp)"
           dir_list="$(mktemp)"
           trap 'rm -f "${batch_file}" "${upload_list}" "${deleted_list}" "${dir_list}"' EXIT
-
-          sftp_cmd=(
-            sshpass -e sftp
-            -P "${FTP_PORT}"
-            -o PreferredAuthentications=password
-            -o PubkeyAuthentication=no
-            -o KbdInteractiveAuthentication=no
-            -o StrictHostKeyChecking=yes
-            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts"
-            -b "${batch_file}"
-            "${FTP_USERNAME}@${FTP_SERVER}"
-          )
 
           remote_path() {
             local path="$1"
@@ -203,7 +178,18 @@ jobs:
             done < "${deleted_list}"
           fi
 
-          "${sftp_cmd[@]}"
+          printf 'bye\n' >> "${batch_file}"
+
+          sshpass -p "${FTP_PASSWORD}" sftp \
+            -b - \
+            -P "${FTP_PORT}" \
+            -o PreferredAuthentications=password \
+            -o PubkeyAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile="${RUNNER_TEMP}/known_hosts" \
+            -o ConnectTimeout=20 \
+            "${FTP_USERNAME}@${FTP_SERVER}" < "${batch_file}"
 
       - name: Confirm deployment completed
         run: echo "SFTP delta deployment completed for commit ${GITHUB_SHA}"
