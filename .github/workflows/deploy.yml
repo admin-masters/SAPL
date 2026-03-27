@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: Deploy via SFTP
 
 on:
   push:
@@ -9,15 +9,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-ftp-deploy
+  group: sftp-deploy
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: FTP Deploy
+    name: SFTP Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
     env:
       DEPLOY_HEALTHCHECK_URL: ${{ secrets.DEPLOY_HEALTHCHECK_URL }}
 
@@ -31,38 +30,25 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes git-ftp curl
+          sudo apt-get install --yes lftp curl
 
-      - name: Configure git-ftp
+      - name: Deploy changed files over SFTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          GITHUB_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_AFTER_SHA: ${{ github.sha }}
+          IGNORE_FILE: .deployignore
         run: |
           set -euo pipefail
-
-          if [[ -z "${FTP_SERVER}" || -z "${FTP_USERNAME}" || -z "${FTP_PASSWORD}" || -z "${FTP_SERVER_DIR}" ]]; then
-            echo "Missing one or more required FTP deployment secrets."
-            exit 1
-          fi
-
-          remote_dir="/${FTP_SERVER_DIR#/}"
-          remote_dir="${remote_dir%/}/"
-
-          git config git-ftp.url "ftp://${FTP_SERVER}"
-          git config git-ftp.user "${FTP_USERNAME}"
-          git config git-ftp.password "${FTP_PASSWORD}"
-          git config git-ftp.remote-root "${remote_dir}"
-          git config git-ftp.syncroot "."
-
-      - name: Deploy changed files with git-ftp
-        run: |
-          set -euo pipefail
-          git ftp push --auto-init --lock --verbose
+          chmod +x .github/scripts/sftp-deploy.sh
+          .github/scripts/sftp-deploy.sh
 
       - name: Confirm deployment completed
-        run: echo "FTP deployment completed for commit ${GITHUB_SHA}"
+        run: echo "SFTP deployment completed for commit ${GITHUB_SHA}"
 
       - name: Verify site is responding
         if: ${{ env.DEPLOY_HEALTHCHECK_URL != '' }}
