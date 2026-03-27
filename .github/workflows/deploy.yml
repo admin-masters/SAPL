@@ -1,0 +1,94 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-ftp-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: FTP Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      DEPLOY_HEALTHCHECK_URL: ${{ secrets.DEPLOY_HEALTHCHECK_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install deployment tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes git-ftp curl
+
+      - name: Configure git-ftp
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${FTP_SERVER}" || -z "${FTP_USERNAME}" || -z "${FTP_PASSWORD}" || -z "${FTP_SERVER_DIR}" ]]; then
+            echo "Missing one or more required FTP deployment secrets."
+            exit 1
+          fi
+
+          remote_dir="/${FTP_SERVER_DIR#/}"
+          remote_dir="${remote_dir%/}/"
+
+          git config git-ftp.url "ftp://${FTP_SERVER}"
+          git config git-ftp.user "${FTP_USERNAME}"
+          git config git-ftp.password "${FTP_PASSWORD}"
+          git config git-ftp.remote-root "${remote_dir}"
+          git config git-ftp.syncroot "."
+
+      - name: Deploy changed files with git-ftp
+        run: |
+          set -euo pipefail
+          git ftp push --auto-init --lock --verbose
+
+      - name: Confirm deployment completed
+        run: echo "FTP deployment completed for commit ${GITHUB_SHA}"
+
+      - name: Verify site is responding
+        if: ${{ env.DEPLOY_HEALTHCHECK_URL != '' }}
+        run: |
+          set -euo pipefail
+
+          http_code="$(
+            curl \
+              --silent \
+              --show-error \
+              --location \
+              --retry 3 \
+              --retry-delay 5 \
+              --max-time 30 \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              "${DEPLOY_HEALTHCHECK_URL}"
+          )"
+
+          if [[ "${http_code}" =~ ^(2|3) ]]; then
+            echo "Health check passed with HTTP ${http_code}"
+          else
+            echo "Health check failed with HTTP ${http_code}"
+            exit 1
+          fi
+
+      - name: Skip HTTP verification when no health-check URL is configured
+        if: ${{ env.DEPLOY_HEALTHCHECK_URL == '' }}
+        run: echo "DEPLOY_HEALTHCHECK_URL is not set, so the post-deploy HTTP check was skipped."
