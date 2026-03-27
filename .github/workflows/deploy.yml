@@ -39,7 +39,6 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
-          GITHUB_BEFORE_SHA: ${{ github.event.before }}
           GITHUB_AFTER_SHA: ${{ github.sha }}
           IGNORE_FILE: .deployignore
         run: |

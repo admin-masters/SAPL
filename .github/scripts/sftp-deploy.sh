@@ -8,6 +8,7 @@ FTP_SERVER_DIR="${FTP_SERVER_DIR:?FTP_SERVER_DIR is required}"
 FTP_PORT="${FTP_PORT:-22}"
 GITHUB_AFTER_SHA="${GITHUB_AFTER_SHA:?GITHUB_AFTER_SHA is required}"
 IGNORE_FILE="${IGNORE_FILE:-.deployignore}"
+DEPLOY_STATE_FILE="${DEPLOY_STATE_FILE:-.github-actions-deploy-sha}"
 
 normalize_remote_root() {
   local dir="$1"
@@ -59,10 +60,38 @@ declare -i upload_count=0
 declare -i delete_count=0
 
 lftp_script="$(mktemp)"
-trap 'rm -f "$lftp_script"' EXIT
+state_file_local="$(mktemp)"
+trap 'rm -f "$lftp_script" "$state_file_local"' EXIT
 
 append_cmd() {
   printf '%s\n' "$1" >> "$lftp_script"
+}
+
+read_remote_deployed_sha() {
+  local output=""
+  local sha=""
+
+  output="$(
+    lftp 2>/dev/null <<EOF || true
+set cmd:fail-exit no
+set net:max-retries 1
+set net:reconnect-interval-base 5
+set net:reconnect-interval-max 30
+set net:persist-retries 1
+set sftp:auto-confirm yes
+open -u "$(lftp_escape "$FTP_USERNAME")","$(lftp_escape "$FTP_PASSWORD")" -p "$(lftp_escape "$FTP_PORT")" "sftp://$(lftp_escape "$FTP_SERVER")"
+mkdir -p "$(lftp_escape "$remote_root")"
+cd "$(lftp_escape "$remote_root")"
+cat "$(lftp_escape "$DEPLOY_STATE_FILE")"
+bye
+EOF
+  )"
+
+  sha="$(printf '%s\n' "$output" | tr -d '\r' | tail -n 1 | tr -d '\n')"
+
+  if [[ -n "$sha" ]] && git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+    printf '%s' "$sha"
+  fi
 }
 
 queue_upload() {
@@ -102,13 +131,10 @@ if ! git cat-file -e "${GITHUB_AFTER_SHA}^{commit}" 2>/dev/null; then
   exit 1
 fi
 
-if is_zero_sha "${GITHUB_BEFORE_SHA:-}" || ! git cat-file -e "${GITHUB_BEFORE_SHA}^{commit}" 2>/dev/null; then
-  echo "Running initial full deploy from tracked files."
-  while IFS= read -r -d '' path; do
-    queue_upload "$path"
-  done < <(git ls-files -z)
-else
-  echo "Deploying changed files from ${GITHUB_BEFORE_SHA} to ${GITHUB_AFTER_SHA}."
+remote_deployed_sha="$(read_remote_deployed_sha || true)"
+
+if [[ -n "$remote_deployed_sha" ]]; then
+  echo "Deploying changed files from ${remote_deployed_sha} to ${GITHUB_AFTER_SHA}."
   while IFS= read -r -d '' status; do
     case "$status" in
       R*|C*)
@@ -126,15 +152,27 @@ else
         queue_upload "$path"
         ;;
     esac
-  done < <(git diff --name-status -z --find-renames "${GITHUB_BEFORE_SHA}" "${GITHUB_AFTER_SHA}" --)
+  done < <(git diff --name-status -z --find-renames "${remote_deployed_sha}" "${GITHUB_AFTER_SHA}" --)
+else
+  echo "Running initial full deploy from tracked files."
+  while IFS= read -r -d '' path; do
+    queue_upload "$path"
+  done < <(git ls-files -z)
 fi
 
-if (( upload_count == 0 && delete_count == 0 )); then
+if (( upload_count == 0 && delete_count == 0 )) && [[ "${remote_deployed_sha:-}" == "${GITHUB_AFTER_SHA}" ]]; then
   echo "No deployable file changes detected after exclusions."
   exit 0
 fi
 
+printf '%s\n' "$GITHUB_AFTER_SHA" > "$state_file_local"
+append_cmd "put -o \"$(lftp_escape "$DEPLOY_STATE_FILE")\" \"$(lftp_escape "$state_file_local")\""
 append_cmd "bye"
 
-echo "Queued ${upload_count} uploads and ${delete_count} deletions."
+if (( upload_count == 0 && delete_count == 0 )); then
+  echo "No deployable file changes detected after exclusions; updating remote deploy state."
+else
+  echo "Queued ${upload_count} uploads and ${delete_count} deletions."
+fi
+
 lftp -f "$lftp_script"
